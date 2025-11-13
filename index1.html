@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -75,30 +76,15 @@
             transform: translateX(24px);
         }
         
-        /* Stile per lo spinner di caricamento */
-        .loading-spinner {
-            border-color: transparent;
-            border-top-color: #4f46e5; /* Indigo */
-        }
+        /* Rimosso lo spinner di caricamento e lo stile relativo */
     </style>
 </head>
 <body class="p-4 sm:p-8 flex items-center justify-center">
 
-    <!-- SCHERMATA INIZIALE DI ACCESSO / CARICAMENTO -->
-    <div id="app-loading" class="w-full max-w-md bg-white rounded-xl shadow-2xl p-10 text-center space-y-5">
-        <div class="loading-spinner animate-spin rounded-full h-14 w-14 border-4 mx-auto"></div>
-        <h2 class="text-2xl font-bold text-indigo-700">Accesso in corso...</h2>
-        <p class="text-gray-500">Stiamo stabilendo la tua sessione per l'accesso completo alle funzionalità.</p>
-    </div>
+    <!-- CONTENUTO PRINCIPALE DELL'APP (ORA VISIBILE SUBITO) -->
+    <div id="main-app-content" class="w-full max-w-md bg-white rounded-xl shadow-2xl p-6 sm:p-8 space-y-6 z-20">
 
-    <!-- CONTENUTO PRINCIPALE DELL'APP (NASCOSTO FINO ALL'AUTENTICAZIONE) -->
-    <div id="main-app-content" class="hidden w-full max-w-md bg-white rounded-xl shadow-2xl p-6 sm:p-8 space-y-6 z-20">
-
-        <!-- Display ID Utente (Richiesto per l'ambiente collaborativo) -->
-        <div class="text-xs text-center p-2 bg-indigo-50 border border-indigo-200 rounded-lg">
-            <p class="font-medium text-indigo-700">ID Utente Sessione</p>
-            <p id="user-id-display" class="font-mono text-indigo-500 truncate mt-0.5"></p>
-        </div>
+        <!-- Rimosso Display ID Utente (Non necessario senza Firebase) -->
         
         <!-- Titolo e descrizione -->
         <header class="text-center space-y-1">
@@ -189,10 +175,7 @@
     </div>
 
     <script type="module">
-        // Firebase Imports
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Rimosse tutte le importazioni Firebase
         
         // --- CONSTANTI API GEMINI ---
         const GEMINI_TEXT_MODEL = 'gemini-2.5-flash-preview-09-2025';
@@ -209,17 +192,12 @@
         const LUNCH_ENABLED_EL = document.getElementById('lunch-enabled');
         const LUNCH_INPUTS_CONTAINER = document.getElementById('lunch-inputs-container');
         const LUNCH_HEADER_EL = document.getElementById('lunch-header');
-        const USER_ID_DISPLAY_EL = document.getElementById('user-id-display');
-        const APP_LOADING_EL = document.getElementById('app-loading');
-        const MAIN_APP_CONTENT_EL = document.getElementById('main-app-content');
         
         // Elementi Gemini
         const GENERATE_REMINDER_BTN = document.getElementById('generate-reminder-btn');
         const REMINDER_OUTPUT_EL = document.getElementById('reminder-output');
         
         // --- STATO GLOBALE ---
-        let db, auth;
-        let userId = null;
         let selectedDayType = 'Mon-Thu'; // Default a Lun-Gio (8 ore)
         let latestDepartureTime = null; // Memorizza l'orario di uscita calcolato per Gemini
 
@@ -333,7 +311,7 @@
          * Seleziona il giorno lavorativo (Mon-Thu o Friday) e aggiorna la UI.
          * @param {string} dayType - 'Mon-Thu' o 'Friday'.
          */
-        function selectDay(dayType) {
+        window.selectDay = function(dayType) {
             selectedDayType = dayType;
             
             // Aggiorna lo stile dei pulsanti
@@ -359,7 +337,7 @@
         /**
          * Funzione: autocompila l'Orario di Fine Pausa aggiungendo 30 minuti all'Inizio Pausa.
          */
-        function autoPopulateLunchEnd() {
+        window.autoPopulateLunchEnd = function() {
             // Se la pausa non è abilitata per il venerdì, non autocompilare
             if (selectedDayType === 'Friday' && !LUNCH_ENABLED_EL.checked) {
                 return;
@@ -398,18 +376,12 @@
         /**
          * Funzione principale per il calcolo dell'orario di uscita.
          */
-        function calculateDepartureTime() {
+        window.calculateDepartureTime = function() {
             hideMessage();
             DEPARTURE_TIME_EL.textContent = '--:--';
             NET_HOURS_INFO_EL.textContent = '--';
             latestDepartureTime = null; // Resetta l'orario di uscita per Gemini
             REMINDER_OUTPUT_EL.classList.add('hidden');
-
-            // Non calcolare se l'autenticazione non è pronta
-            if (!userId) {
-                console.warn("Calcolo omesso: Utente non ancora autenticato.");
-                return;
-            }
 
             // 1. Definisci le ore di lavoro nette in base al giorno selezionato
             const requiredNetWorkHours = (selectedDayType === 'Friday') ? 5 : 8;
@@ -490,7 +462,7 @@
         /**
          * Genera un promemoria motivazionale basato sull'orario di uscita calcolato.
          */
-        async function generateReminder() {
+        window.generateReminder = async function() {
             REMINDER_OUTPUT_EL.classList.add('hidden');
             if (!latestDepartureTime || DEPARTURE_TIME_EL.textContent === '--:--') {
                 showMessage("Calcola prima l'orario di uscita per generare il promemoria.", 'warning');
@@ -547,68 +519,13 @@
             GENERATE_REMINDER_BTN.textContent = '✨ Genera Promemoria di Uscita';
         }
 
-
-        // --- FUNZIONE DI INIZIALIZZAZIONE FIREBASE E AUTENTICAZIONE ---
-        async function initApp() {
-            setLogLevel('Debug');
-            
-            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-
-            if (Object.keys(firebaseConfig).length === 0) {
-                console.error("Firebase configuration is missing.");
-                APP_LOADING_EL.innerHTML = '<h2 class="text-xl font-semibold text-red-600">Errore: Configurazione Firebase mancante.</h2>';
-                return;
-            }
-
-            try {
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-            } catch (error) {
-                console.error("Firebase Initialization Error:", error);
-                APP_LOADING_EL.innerHTML = `<h2 class="text-xl font-semibold text-red-600">Errore di Inizializzazione.</h2><p class="text-sm text-gray-500">${error.message}</p>`;
-                return;
-            }
-            
-            // Listener per lo stato di autenticazione
-            onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                    userId = user.uid;
-                    console.log("Authenticated with UID:", userId);
-                    
-                    // Nasconde la schermata di caricamento e mostra l'app principale
-                    APP_LOADING_EL.classList.add('hidden');
-                    MAIN_APP_CONTENT_EL.classList.remove('hidden');
-                    USER_ID_DISPLAY_EL.textContent = userId;
-
-                    // Esegue la logica di inizializzazione dell'app
-                    selectDay('Mon-Thu'); 
-                    autoPopulateLunchEnd();
-                } else {
-                    // Tentativo di login
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined') {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch (error) {
-                        console.error("Firebase Auth Error:", error);
-                        APP_LOADING_EL.innerHTML = `<h2 class="text-xl font-semibold text-red-600">Errore di accesso:</h2><p class="text-sm text-gray-500">${error.message}</p>`;
-                    }
-                }
-            });
-        }
-
-        // --- ATTACCO FUNZIONI A WINDOW PER GLI EVENTI HTML INLINE ---
-        window.selectDay = selectDay;
-        window.autoPopulateLunchEnd = autoPopulateLunchEnd;
-        window.calculateDepartureTime = calculateDepartureTime;
-        window.toggleLunchInputs = toggleLunchInputs;
-        window.generateReminder = generateReminder; // Espone la funzione Gemini (Testo)
-
-        // Avvia l'app all'onload della finestra
-        window.onload = initApp;
+        // --- AVVIO APP (Ora immediato) ---
+        window.onload = function() {
+            // Inizializza l'app immediatamente senza aspettare l'autenticazione
+            selectDay('Mon-Thu'); 
+            autoPopulateLunchEnd();
+            calculateDepartureTime();
+        };
 
     </script>
 </body>
