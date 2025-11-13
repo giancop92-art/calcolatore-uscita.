@@ -1,0 +1,615 @@
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calcolatore Orario Lavorativo</title>
+    <!-- Ottimizzazione PWA per Android: apre l'app a schermo intero e definisce il tema -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#b2ebf2">
+    <!-- Icona PWA (placeholder, può essere sostituita) -->
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAAjklEQVQ4jWPk49jEAAwMDPwO2BhEGAkYfJt2X9z6X1xRkFf3R4B9YGA4/d9E2v8/QJvBwODQ1lBvE/g+B48mBv9A3dDqB4kGBgZtBv4H928zYx/MfwJ3D2M0h7Qh+c//f8G+gYFBf98hR2W0M1z2/7//x9pBv7tVv/P/53hC1DDBcNgAAAAAElFTkSuQmCC">
+    
+    <!-- Carica Tailwind CSS per uno stile moderno e responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Imposta il font Inter e una transizione generale per un look moderno */
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Sfondo fisso: gradiente pulito blu/azzurro per un look professionale */
+            background: linear-gradient(135deg, #e0f2f7 0%, #b2ebf2 100%); 
+            min-height: 100vh;
+            transition: all 0.3s ease;
+        }
+        
+        /* Stile specifico per i campi input type="time" */
+        input[type="time"] {
+            appearance: none;
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 1.25rem;
+            line-height: 1.75rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+            width: 100%;
+            cursor: pointer;
+        }
+        /* Stile per i pulsanti di selezione del giorno (attivo) */
+        .day-active {
+            background-color: #10b981; /* Smeraldo */
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.5), 0 2px 4px -2px rgba(16, 185, 129, 0.5);
+        }
+
+        /* Stile per il Toggle Switch (Verde potenziato) */
+        .toggle-switch input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-switch .slider {
+            cursor: pointer;
+            width: 48px;
+            height: 24px;
+            background-color: #9ca3af; 
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .toggle-switch .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        .toggle-switch input:checked + .slider {
+            background-color: #04d093; /* Verde più acceso */
+        }
+        .toggle-switch input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+        
+        /* Stile per lo spinner di caricamento */
+        .loading-spinner {
+            border-color: transparent;
+            border-top-color: #4f46e5; /* Indigo */
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 flex items-center justify-center">
+
+    <!-- SCHERMATA INIZIALE DI ACCESSO / CARICAMENTO -->
+    <div id="app-loading" class="w-full max-w-md bg-white rounded-xl shadow-2xl p-10 text-center space-y-5">
+        <div class="loading-spinner animate-spin rounded-full h-14 w-14 border-4 mx-auto"></div>
+        <h2 class="text-2xl font-bold text-indigo-700">Accesso in corso...</h2>
+        <p class="text-gray-500">Stiamo stabilendo la tua sessione per l'accesso completo alle funzionalità.</p>
+    </div>
+
+    <!-- CONTENUTO PRINCIPALE DELL'APP (NASCOSTO FINO ALL'AUTENTICAZIONE) -->
+    <div id="main-app-content" class="hidden w-full max-w-md bg-white rounded-xl shadow-2xl p-6 sm:p-8 space-y-6 z-20">
+
+        <!-- Display ID Utente (Richiesto per l'ambiente collaborativo) -->
+        <div class="text-xs text-center p-2 bg-indigo-50 border border-indigo-200 rounded-lg">
+            <p class="font-medium text-indigo-700">ID Utente Sessione</p>
+            <p id="user-id-display" class="font-mono text-indigo-500 truncate mt-0.5"></p>
+        </div>
+        
+        <!-- Titolo e descrizione -->
+        <header class="text-center space-y-1">
+            <h1 class="text-3xl font-extrabold text-gray-900">Calcolo Uscita</h1>
+            <p class="text-gray-500">Inserisci i tuoi orari per calcolare l'uscita.</p>
+        </header>
+
+        <!-- Selettore del Giorno (Tabs) -->
+        <div class="space-y-4">
+            <label class="block text-sm font-medium text-gray-700">Seleziona il Giorno</label>
+            <div id="day-selector" class="flex justify-between p-1 bg-gray-100 rounded-lg shadow-inner">
+                <!-- I pulsanti vengono gestiti da JS per semplicità, Mon-Gio vs Ven -->
+                <button type="button" data-day="Mon-Thu" class="flex-1 py-2 px-3 text-center text-sm font-semibold rounded-lg transition duration-150 ease-in-out text-gray-600 hover:bg-white" onclick="selectDay('Mon-Thu')">Lun - Gio (8h)</button>
+                <button type="button" data-day="Friday" class="flex-1 py-2 px-3 text-center text-sm font-semibold rounded-lg transition duration-150 ease-in-out text-gray-600 hover:bg-white" onclick="selectDay('Friday')">Ven (5h)</button>
+            </div>
+        </div>
+
+
+        <!-- Campi di Input -->
+        <div class="space-y-4">
+            <!-- Orario Ingresso -->
+            <div>
+                <!-- ETICHETTA AGGIORNATA -->
+                <label for="entry-time" class="block text-sm font-medium text-gray-700 mb-1">A che ora entri lavativo? 😏</label>
+                <!-- Aggiunto onchange per l'autocompilazione della pausa in caso di orario ingresso -->
+                <input type="time" id="entry-time" class="time-input" value="09:00" onchange="autoPopulateLunchEnd(); calculateDepartureTime();">
+            </div>
+
+            <div class="border-t border-gray-200 pt-4 space-y-4">
+                
+                <!-- Toggle per la Pausa Pranzo (Visibile solo al Venerdì) -->
+                <div id="lunch-toggle-wrapper" class="hidden flex items-center justify-between p-2 rounded-lg bg-gray-50">
+                    <label for="lunch-enabled" class="text-sm font-semibold text-gray-800 flex-1">
+                        Includi Pausa Pranzo (Opzionale)
+                    </label>
+                    <label class="toggle-switch relative inline-block w-12 h-6">
+                        <!-- Rimosso 'checked' di default per consentire alla logica JS di gestirlo -->
+                        <input type="checkbox" id="lunch-enabled" onchange="toggleLunchInputs(); calculateDepartureTime();">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <p id="lunch-header" class="text-sm font-semibold text-gray-600">Pausa Pranzo (Min. 30 minuti)</p>
+                
+                <div id="lunch-inputs-container">
+                    <!-- Inizio Pausa -->
+                    <div>
+                        <!-- ETICHETTA AGGIORNATA -->
+                        <label for="lunch-start" class="block text-sm font-medium text-gray-700 mb-1">Si pappa... 🤤</label>
+                        <!-- Aggiunto onchange per l'autocompilazione della fine pausa (+30 min) -->
+                        <input type="time" id="lunch-start" class="time-input" onchange="autoPopulateLunchEnd(); calculateDepartureTime();">
+                    </div>
+
+                    <!-- Fine Pausa -->
+                    <div>
+                        <!-- ETICHETTA AGGIORNATA -->
+                        <label for="lunch-end" class="block text-sm font-medium text-gray-700 mb-1">Si torna a far finta di lavorare 🙄</label>
+                        <input type="time" id="lunch-end" class="time-input" onchange="calculateDepartureTime()">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Output (Campo Protetto) -->
+        <div class="pt-6 border-t border-dashed border-gray-300 space-y-4">
+            <div class="bg-indigo-50 p-4 rounded-xl shadow-inner flex flex-col items-center">
+                <!-- ETICHETTA AGGIORNATA -->
+                <p class="text-sm font-medium text-indigo-700 uppercase">Orario di Scarcerazione 🔓</p>
+                <p id="departure-time" class="text-5xl font-extrabold text-indigo-900 mt-1">--:--</p>
+                <p id="net-hours-info" class="text-xs text-indigo-500 mt-2 font-mono">--</p>
+            </div>
+
+            <!-- Nuovo pulsante e output Gemini -->
+            <button id="generate-reminder-btn" 
+                    onclick="generateReminder()"
+                    class="w-full bg-emerald-500 text-white font-bold py-3 px-4 rounded-xl transition duration-200 ease-in-out hover:bg-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-300 shadow-lg shadow-emerald-200 disabled:opacity-50">
+                ✨ Genera Promemoria di Uscita
+            </button>
+            
+            <div id="reminder-output" class="hidden p-4 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm font-medium">
+                <!-- Il promemoria generato da Gemini verrà inserito qui -->
+            </div>
+        </div>
+
+        <!-- Message Box per errori o messaggi -->
+        <div id="message-box" class="hidden p-3 text-sm rounded-lg bg-yellow-100 text-yellow-800" role="alert"></div>
+
+    </div>
+
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // --- CONSTANTI API GEMINI ---
+        const GEMINI_TEXT_MODEL = 'gemini-2.5-flash-preview-09-2025';
+        const API_KEY = ""; // L'API key è gestita dall'ambiente Canvas.
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent?key=${API_KEY}`;
+        
+        // --- RIFERIMENTI DOM ---
+        const DEPARTURE_TIME_EL = document.getElementById('departure-time');
+        const MESSAGE_BOX_EL = document.getElementById('message-box');
+        const NET_HOURS_INFO_EL = document.getElementById('net-hours-info');
+        const LUNCH_START_EL = document.getElementById('lunch-start');
+        const LUNCH_END_EL = document.getElementById('lunch-end');
+        const LUNCH_TOGGLE_WRAPPER = document.getElementById('lunch-toggle-wrapper');
+        const LUNCH_ENABLED_EL = document.getElementById('lunch-enabled');
+        const LUNCH_INPUTS_CONTAINER = document.getElementById('lunch-inputs-container');
+        const LUNCH_HEADER_EL = document.getElementById('lunch-header');
+        const USER_ID_DISPLAY_EL = document.getElementById('user-id-display');
+        const APP_LOADING_EL = document.getElementById('app-loading');
+        const MAIN_APP_CONTENT_EL = document.getElementById('main-app-content');
+        
+        // Elementi Gemini
+        const GENERATE_REMINDER_BTN = document.getElementById('generate-reminder-btn');
+        const REMINDER_OUTPUT_EL = document.getElementById('reminder-output');
+        
+        // --- STATO GLOBALE ---
+        let db, auth;
+        let userId = null;
+        let selectedDayType = 'Mon-Thu'; // Default a Lun-Gio (8 ore)
+        let latestDepartureTime = null; // Memorizza l'orario di uscita calcolato per Gemini
+
+        // --- FUNZIONI UTILITY ---
+
+        /**
+         * Converte una stringa di tempo "HH:MM" in minuti totali da mezzanotte.
+         * @param {string} timeStr - La stringa di tempo ("HH:MM").
+         * @returns {number | null} I minuti totali o null se non valido.
+         */
+        function timeToMinutes(timeStr) {
+            if (!timeStr) return null;
+            const parts = timeStr.split(':');
+            if (parts.length !== 2) return null;
+            const hours = parseInt(parts[0], 10);
+            const minutes = parseInt(parts[1], 10);
+            if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+            return (hours * 60) + minutes;
+        }
+
+        /**
+         * Converte i minuti totali da mezzanotte in una stringa di tempo "HH:MM".
+         * @param {number} totalMinutes - I minuti totali.
+         * @returns {string} La stringa di tempo formattata.
+         */
+        function minutesToTime(totalMinutes) {
+            // Gestisce i minuti che superano le 24 ore (il giorno dopo)
+            const minutesInDay = 24 * 60;
+            // Usiamo il resto della divisione per gestire il "wrap-around" dell'orario
+            const adjustedMinutes = totalMinutes % minutesInDay; 
+            
+            const hours = Math.floor(adjustedMinutes / 60);
+            const minutes = adjustedMinutes % 60;
+            
+            const hoursStr = String(hours).padStart(2, '0');
+            const minutesStr = String(minutes).padStart(2, '0');
+            
+            return `${hoursStr}:${minutesStr}`;
+        }
+
+        /**
+         * Mostra un messaggio di errore o avviso.
+         * @param {string} message - Messaggio da mostrare.
+         * @param {string} type - 'error' o 'warning' o 'success'.
+         */
+        function showMessage(message, type = 'warning') {
+            MESSAGE_BOX_EL.textContent = message;
+            MESSAGE_BOX_EL.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-yellow-100', 'text-yellow-800', 'bg-green-100', 'text-green-800');
+            if (type === 'error') {
+                MESSAGE_BOX_EL.classList.add('bg-red-100', 'text-red-800');
+            } else if (type === 'success') {
+                MESSAGE_BOX_EL.classList.add('bg-green-100', 'text-green-800');
+            }
+             else {
+                MESSAGE_BOX_EL.classList.add('bg-yellow-100', 'text-yellow-800');
+            }
+        }
+
+        /**
+         * Nasconde il messaggio.
+         */
+        function hideMessage() {
+            MESSAGE_BOX_EL.classList.add('hidden');
+        }
+
+        // --- FUNZIONI DI LOGICA APP ---
+
+        /**
+         * Mostra/nasconde il toggle della pausa e gli input della pausa a seconda del giorno selezionato.
+         */
+        function updateLunchVisibility() {
+            const isFriday = selectedDayType === 'Friday';
+            
+            if (isFriday) {
+                LUNCH_TOGGLE_WRAPPER.classList.remove('hidden');
+                // Pausa NON selezionata di default per il Venerdì (come richiesto)
+                LUNCH_ENABLED_EL.checked = false; 
+            } else {
+                LUNCH_TOGGLE_WRAPPER.classList.add('hidden');
+                // Per Lun-Gio (8 ore) la pausa deve essere sempre considerata (o obbligatoria)
+                LUNCH_ENABLED_EL.checked = true;
+            }
+
+            // Aggiorna l'interfaccia a seconda che la pausa sia abilitata (utile anche per Lun-Gio)
+            toggleLunchInputs(false);
+        }
+
+        /**
+         * Abilita o disabilita i campi di Inizio/Fine Pausa e aggiorna l'intestazione.
+         * @param {boolean} shouldRecalculate - Indica se il calcolo deve essere rilanciato (true di default).
+         */
+        function toggleLunchInputs(shouldRecalculate = true) {
+            const isEnabled = LUNCH_ENABLED_EL.checked;
+            
+            if (isEnabled) {
+                LUNCH_INPUTS_CONTAINER.classList.remove('hidden');
+                LUNCH_HEADER_EL.textContent = 'Pausa Pranzo (Min. 30 minuti)';
+                LUNCH_HEADER_EL.classList.remove('text-gray-400');
+            } else {
+                LUNCH_INPUTS_CONTAINER.classList.add('hidden');
+                LUNCH_HEADER_EL.textContent = 'Pausa Pranzo Disabilitata';
+                LUNCH_HEADER_EL.classList.add('text-gray-400');
+            }
+
+            if (shouldRecalculate) {
+                calculateDepartureTime();
+            }
+        }
+
+        /**
+         * Seleziona il giorno lavorativo (Mon-Thu o Friday) e aggiorna la UI.
+         * @param {string} dayType - 'Mon-Thu' o 'Friday'.
+         */
+        function selectDay(dayType) {
+            selectedDayType = dayType;
+            
+            // Aggiorna lo stile dei pulsanti
+            document.querySelectorAll('#day-selector button').forEach(button => {
+                button.classList.remove('day-active');
+                button.classList.add('text-gray-600', 'hover:bg-white');
+            });
+            
+            const selectedButton = document.querySelector(`[data-day="${dayType}"]`);
+            if (selectedButton) {
+                selectedButton.classList.add('day-active');
+                selectedButton.classList.remove('text-gray-600', 'hover:bg-white');
+            }
+
+            // Aggiorna la visibilità del toggle pausa
+            updateLunchVisibility();
+            // Ricalcola l'orario di uscita con il nuovo giorno
+            calculateDepartureTime();
+            // Nasconde il promemoria quando si cambia giorno
+            REMINDER_OUTPUT_EL.classList.add('hidden');
+        }
+        
+        /**
+         * Funzione: autocompila l'Orario di Fine Pausa aggiungendo 30 minuti all'Inizio Pausa.
+         */
+        function autoPopulateLunchEnd() {
+            // Se la pausa non è abilitata per il venerdì, non autocompilare
+            if (selectedDayType === 'Friday' && !LUNCH_ENABLED_EL.checked) {
+                return;
+            }
+
+            const lunchStartStr = LUNCH_START_EL.value;
+            const entryTimeStr = document.getElementById('entry-time').value;
+            
+            let minutesToCalculateFrom = null;
+
+            // Priorità 1: Se l'utente ha inserito l'Inizio Pausa, usa quello
+            if (lunchStartStr) {
+                minutesToCalculateFrom = timeToMinutes(lunchStartStr);
+            } 
+            // Priorità 2: Se la pausa non è inserita, ma c'è l'ingresso, suggeriamo una pausa standard (dopo 4 ore dall'ingresso)
+            else if (entryTimeStr) {
+                const entryMinutes = timeToMinutes(entryTimeStr);
+                if (entryMinutes !== null) {
+                    // Suggerisci la pausa dopo 4 ore (240 minuti) dall'ingresso
+                    minutesToCalculateFrom = entryMinutes + 240; 
+                    LUNCH_START_EL.value = minutesToTime(minutesToCalculateFrom);
+                }
+            }
+
+            if (minutesToCalculateFrom !== null) {
+                // Aggiunge la durata minima di 30 minuti
+                const lunchEndMinutes = minutesToCalculateFrom + 30;
+                LUNCH_END_EL.value = minutesToTime(lunchEndMinutes);
+            } else if (!lunchStartStr && !entryTimeStr) {
+                // Se non c'è né ingresso né inizio pausa, non fare nulla
+                LUNCH_END_EL.value = '';
+            }
+        }
+
+
+        /**
+         * Funzione principale per il calcolo dell'orario di uscita.
+         */
+        function calculateDepartureTime() {
+            hideMessage();
+            DEPARTURE_TIME_EL.textContent = '--:--';
+            NET_HOURS_INFO_EL.textContent = '--';
+            latestDepartureTime = null; // Resetta l'orario di uscita per Gemini
+            REMINDER_OUTPUT_EL.classList.add('hidden');
+
+            // Non calcolare se l'autenticazione non è pronta
+            if (!userId) {
+                console.warn("Calcolo omesso: Utente non ancora autenticato.");
+                return;
+            }
+
+            // 1. Definisci le ore di lavoro nette in base al giorno selezionato
+            const requiredNetWorkHours = (selectedDayType === 'Friday') ? 5 : 8;
+            const requiredNetWorkMinutes = requiredNetWorkHours * 60;
+
+            // 2. Ottieni gli orari di ingresso
+            const entryTimeStr = document.getElementById('entry-time').value;
+            const entryMinutes = timeToMinutes(entryTimeStr);
+
+            if (entryMinutes === null) {
+                showMessage("Per favor, inserisci un Orario di Ingresso valido.");
+                return;
+            }
+
+            // 3. Calcola la durata della Pausa Pranzo (0 se disabilitata o incompleta)
+            let lunchDurationMinutes = 0;
+            const isLunchEnabled = LUNCH_ENABLED_EL.checked; // Controlla il flag
+
+            if (isLunchEnabled) {
+                const lunchStartStr = LUNCH_START_EL.value;
+                const lunchEndStr = LUNCH_END_EL.value;
+
+                const lunchStartMinutes = timeToMinutes(lunchStartStr);
+                const lunchEndMinutes = timeToMinutes(lunchEndStr);
+                
+                // Verifica se entrambi i campi pausa pranzo sono compilati
+                const isLunchValid = lunchStartMinutes !== null && lunchEndMinutes !== null;
+
+                if (isLunchValid) {
+                    // Validazione 1: Pausa successiva all'Ingresso
+                    if (lunchStartMinutes <= entryMinutes) {
+                        showMessage("L'Inizio Pausa Pranzo deve essere strettamente successivo all'Orario di Ingresso.", 'error');
+                        return;
+                    }
+                    
+                    // Se la fine pausa è prima dell'inizio pausa, aggiungiamo 24 ore (pausa che si estende al giorno dopo, molto raro, ma possibile)
+                    let effectiveLunchEndMinutes = lunchEndMinutes;
+                    if (lunchEndMinutes < lunchStartMinutes) {
+                        // Questo gestisce il caso, ad esempio, 13:00 inizio, 01:00 fine (il giorno dopo)
+                        effectiveLunchEndMinutes += (24 * 60); 
+                    }
+                    
+                    lunchDurationMinutes = effectiveLunchEndMinutes - lunchStartMinutes;
+                    
+                    // Validazione 2: Regola della pausa minima (solo avviso, non bloccante)
+                    if (lunchDurationMinutes < 30) {
+                        showMessage(`Attenzione: La pausa minima richiesta è di 30 minuti. Quella inserita è di ${lunchDurationMinutes} minuti.`, 'warning');
+                    }
+                } else if (lunchStartMinutes !== null || lunchEndMinutes !== null) {
+                     // Se solo uno dei due è compilato
+                     showMessage("Per calcolare la pausa, devi inserire sia l'Inizio che la Fine pausa.", 'warning');
+                     // Si procede con pausa = 0
+                }
+            }
+
+
+            // 4. Calcolo totale dei minuti da aggiungere
+            // La formula standard è: Ingresso + Ore Nette Lavorate + Pausa Pranzo
+            const totalMinutesToAdd = requiredNetWorkMinutes + lunchDurationMinutes;
+            const departureMinutes = entryMinutes + totalMinutesToAdd;
+
+            // 5. Formattazione dell'output
+            const departureTimeStr = minutesToTime(departureMinutes);
+
+            // 6. Aggiorna lo stato e la UI
+            latestDepartureTime = departureTimeStr;
+            DEPARTURE_TIME_EL.textContent = departureTimeStr;
+            NET_HOURS_INFO_EL.textContent = `${requiredNetWorkHours} ore nette | Pausa: ${lunchDurationMinutes} min`;
+            
+            // Avviso se l'uscita è il giorno dopo
+            if (departureMinutes >= (24 * 60)) {
+                showMessage(`Attenzione: L'uscita è prevista il giorno successivo alle ${departureTimeStr}.`, 'warning');
+            }
+        }
+
+        // --- FUNZIONE GEMINI API: GENERAZIONE PROMEMORIA (Testo) ---
+        
+        /**
+         * Genera un promemoria motivazionale basato sull'orario di uscita calcolato.
+         */
+        async function generateReminder() {
+            REMINDER_OUTPUT_EL.classList.add('hidden');
+            if (!latestDepartureTime || DEPARTURE_TIME_EL.textContent === '--:--') {
+                showMessage("Calcola prima l'orario di uscita per generare il promemoria.", 'warning');
+                return;
+            }
+
+            GENERATE_REMINDER_BTN.disabled = true;
+            GENERATE_REMINDER_BTN.textContent = '⏳ Generazione in corso...';
+            REMINDER_OUTPUT_EL.innerHTML = '';
+            
+            const systemPrompt = "Sei un assistente amichevole e motivazionale. Il tuo compito è creare un breve e incoraggiante promemoria per la fine della giornata lavorativa. La tua risposta deve essere solo il promemoria stesso, senza introduzioni o saluti.";
+            const userQuery = `L'orario di uscita stimato è ${latestDepartureTime}. Scrivi un breve promemoria (massimo 2 frasi) che celebri la fine del lavoro, suggerendo una cosa piacevole da fare subito dopo (es. un piatto, un hobby, una passeggiata) in base all'orario.`;
+            
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+            
+            const maxRetries = 3;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(GEMINI_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+            
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+            
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Errore nella generazione del testo.";
+                    
+                    REMINDER_OUTPUT_EL.textContent = text;
+                    REMINDER_OUTPUT_EL.classList.remove('hidden');
+                    hideMessage();
+                    break; // Successo, esci dal loop
+            
+                } catch (error) {
+                    console.error(`Tentativo ${i + 1} fallito:`, error);
+                    if (i === maxRetries - 1) {
+                        showMessage("Errore durante la generazione del promemoria con Gemini. Riprova più tardi.", 'error');
+                        REMINDER_OUTPUT_EL.classList.add('hidden');
+                    } else {
+                        // Implementa l'exponential backoff: 1s, 2s, 4s...
+                        const delay = Math.pow(2, i) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+
+            GENERATE_REMINDER_BTN.disabled = false;
+            GENERATE_REMINDER_BTN.textContent = '✨ Genera Promemoria di Uscita';
+        }
+
+
+        // --- FUNZIONE DI INIZIALIZZAZIONE FIREBASE E AUTENTICAZIONE ---
+        async function initApp() {
+            setLogLevel('Debug');
+            
+            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
+            if (Object.keys(firebaseConfig).length === 0) {
+                console.error("Firebase configuration is missing.");
+                APP_LOADING_EL.innerHTML = '<h2 class="text-xl font-semibold text-red-600">Errore: Configurazione Firebase mancante.</h2>';
+                return;
+            }
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                APP_LOADING_EL.innerHTML = `<h2 class="text-xl font-semibold text-red-600">Errore di Inizializzazione.</h2><p class="text-sm text-gray-500">${error.message}</p>`;
+                return;
+            }
+            
+            // Listener per lo stato di autenticazione
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    console.log("Authenticated with UID:", userId);
+                    
+                    // Nasconde la schermata di caricamento e mostra l'app principale
+                    APP_LOADING_EL.classList.add('hidden');
+                    MAIN_APP_CONTENT_EL.classList.remove('hidden');
+                    USER_ID_DISPLAY_EL.textContent = userId;
+
+                    // Esegue la logica di inizializzazione dell'app
+                    selectDay('Mon-Thu'); 
+                    autoPopulateLunchEnd();
+                } else {
+                    // Tentativo di login
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined') {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Firebase Auth Error:", error);
+                        APP_LOADING_EL.innerHTML = `<h2 class="text-xl font-semibold text-red-600">Errore di accesso:</h2><p class="text-sm text-gray-500">${error.message}</p>`;
+                    }
+                }
+            });
+        }
+
+        // --- ATTACCO FUNZIONI A WINDOW PER GLI EVENTI HTML INLINE ---
+        window.selectDay = selectDay;
+        window.autoPopulateLunchEnd = autoPopulateLunchEnd;
+        window.calculateDepartureTime = calculateDepartureTime;
+        window.toggleLunchInputs = toggleLunchInputs;
+        window.generateReminder = generateReminder; // Espone la funzione Gemini (Testo)
+
+        // Avvia l'app all'onload della finestra
+        window.onload = initApp;
+
+    </script>
+</body>
+</html>
